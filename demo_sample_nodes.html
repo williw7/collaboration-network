@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>HeliosWeb Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            background: #0b1226;
+            color: #e6ecff;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            height: 100vh;
+        }
+
+        aside {
+            background: #0e1633;
+            border-right: 1px solid #1f2a52;
+            padding: 16px;
+            overflow: auto;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 6px;
+        }
+
+        h2 {
+            font-size: 14px;
+            margin: 18px 0 8px;
+            opacity: .9;
+        }
+
+        .muted {
+            font-size: 12px;
+            opacity: .7;
+            margin-bottom: 12px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        button {
+            background: #18224a;
+            color: #e6ecff;
+            border: 1px solid #2a3773;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #223070;
+        }
+
+        .info {
+            font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
+            white-space: pre-wrap;
+            background: #0b1226;
+            border: 1px solid #1f2a52;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        #helios {
+            width: 100%;
+            height: 100%;
+            min-height: 520px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout">
+        <aside>
+            <h1>HeliosWeb Dashboard Test</h1>
+            <div class="muted">Drag = rotate / Wheel = zoom</div>
+
+            <h2>Hard-coded Attributes</h2>
+            <div class="muted">Position (x,y,z), Color, Size, Outline, Opacity</div>
+
+            <h2>Change Properties</h2>
+            <div class="row">
+                <button id="btnIncSize">Size +50%</button>
+                <button id="btnDecSize">Size -50%</button>
+                <button id="btnRandomColors">Random Colors*</button>
+                <button id="btnFadeNodes">Half Opacity</button>
+            </div>
+
+            <h2>Reposition (x,y)</h2>
+            <div class="row">
+                <button id="btnGrid">Grid*</button>
+                <button id="btnScatter">Scatter*</button>
+            </div>
+
+            <h2>Depth (z)</h2>
+            <div class="row">
+                <button id="btnScatterZ">Scatter Z*</button>
+                <button id="btnFlattenZ">Flatten Z*</button>
+            </div>
+
+            <h2>Layout</h2>
+            <div class="row">
+                <button id="btnPauseLayout">Pause Layout</button>
+                <button id="btnResumeLayout">Resume Layout</button>
+            </div>
+
+            <h2>Add Node</h2>
+            <div class="row">
+                <button id="btnAddNode">Add a Node*</button>
+            </div>
+
+            <h2>Selected Node</h2>
+            <div id="selectedBox" class="info">No node selected.</div>
+
+            <h2>Edges</h2>
+            <div class="row">
+                <button id="btnThickEdges">Thicker*</button>
+                <button id="btnLightEdges">Thinner*</button>
+                <button id="btnEdgeAlpha">Half Opacity*</button>
+            </div>
+        </aside>
+
+        <main id="helios"></main>
+    </div>
+
+    <script type="module">
+        import { Helios } from "https://cdn.skypack.dev/helios-web?min";
+
+        // Example network
+        const nodes = {
+            A: { label: "Node A", x: -140, y: 0, z: -60, initSize: 14, initColor: [0.96, 0.58, 0.12, 1], initOutlineColor: [1, 1, 1, 0.9] },
+            B: { label: "Node B", x: 0, y: 0, z: 0, initSize: 20, initColor: [0.21, 0.74, 0.93, 0.85], initOutlineColor: [1, 1, 1, 0.9] },
+            C: { label: "Node C", x: 140, y: 0, z: 60, initSize: 12, initColor: [0.50, 0.85, 0.35, 0.65], initOutlineColor: [1, 1, 1, 0.9] },
+        };
+        const edges = [
+            { source: "A", target: "B", width: 2.0, color: [0.85, 0.85, 0.95, 0.9] },
+            { source: "B", target: "C", width: 3.0, color: [0.85, 0.85, 0.95, 0.6] },
+            { source: "C", target: "A", width: 1.5, color: [0.85, 0.85, 0.95, 1.0] },
+        ];
+
+        const helios = new Helios({
+            elementID: "helios",
+            nodes,
+            edges,
+            use2D: false,
+            density: false,
+            backgroundColor: [0, 0, 0, 0],
+            webglOptions: { alpha: true, premultipliedAlpha: true }
+        });
+
+        // onReady
+        helios.onReady(() => {
+            // transparent canvas
+            const canvas = document.querySelector('#helios canvas');
+            const gl = canvas?.getContext('webgl2') || canvas?.getContext('webgl');
+
+            // keep coordinates
+            helios.pauseLayout();
+
+            // normalize into view
+            // (function normalize3D() {
+            //     const arr = Object.values(helios.network.nodes);
+            //     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            //     for (const n of arr) {
+            //         if (typeof n.x === "number") { if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x; }
+            //         if (typeof n.y === "number") { if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y; }
+            //         if (typeof n.z === "number") { if (n.z < minZ) minZ = n.z; if (n.z > maxZ) maxZ = n.z; }
+            //     }
+            //     const w = maxX - minX || 1, h = maxY - minY || 1, d = maxZ - minZ || 1;
+            //     const s = 400 / Math.max(w, h, d);
+            //     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+            //     for (const n of arr) {
+            //         if (typeof n.x === "number") n.x = (n.x - cx) * s;
+            //         if (typeof n.y === "number") n.y = (n.y - cy) * s;
+            //         if (typeof n.z === "number") n.z = (n.z - cz) * s;
+            //     }
+            // })();
+
+            // map attributes
+            helios
+                .nodeColor(n => n.initColor)
+                .nodeSize(n => n.initSize)
+                .nodeOutlineColor(n => n.initOutlineColor)
+                .nodeOutlineWidth(n => n.initOutlineWidth ?? 1.5);
+            const ids = Object.keys(helios.network.nodes);
+            ids.forEach(id => {
+                const n = helios.network.nodes[id];
+                n.x = n.x;
+                n.y = n.y;
+                n.z = n.z;
+            });
+
+            // first paint
+            helios.update().render();
+            requestAnimationFrame(() => helios.render());
+
+            // context has alpha?
+            const attrs = canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'))?.getContextAttributes?.();
+            console.log('GL attrs:', attrs); // expect alpha: true
+
+            const drawColorsOnly = () => helios.render();
+            const drawGeomChange = () => { helios.update().render(); };
+            const withLayoutPaused = (fn) => { helios.pauseLayout(); fn(); };
+        });
+
+        // Interactions
+        const selectedBox = document.getElementById("selectedBox");
+        helios.onNodeHoverStart((node) => { if (node) helios.nodeOutlineWidth(3, node.id).render(); });
+        helios.onNodeHoverEnd((node) => { if (node) helios.nodeOutlineWidth(1.5, node.id).render(); });
+        helios.onNodeClick((node) => {
+            if (!node) { selectedBox.textContent = "No node selected."; return; }
+            const { id, label, x = 0, y = 0, z = 0, initSize, initColor } = node;
+            const pos = `(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`;
+            const col = Array.isArray(initColor) ? `[${initColor.map(v => (v ?? 0).toFixed(2)).join(", ")}]` : "default";
+            selectedBox.textContent =
+                `Selected node:
+id: ${id}
+label: ${label ?? ""}
+pos: ${pos}
+size: ${initSize ?? "default"}
+color: ${col}`;
+        });
+
+        // === Dashboard controls ===
+        // defaults for safety (used by fade button)
+        const NODE_COLOR_DEFAULT = [0.7, 0.7, 0.7, 1];
+        const NODE_OUTLINE_DEFAULT = [1, 1, 1, 0.9];
+        const EDGE_COLOR_DEFAULT = [0.85, 0.85, 0.95, 1];
+
+        const scaleAllSizes = (factor) => {
+            Object.values(helios.network.nodes).forEach(n => {
+                n.initSize = (typeof n.initSize === "number" ? n.initSize : 12) * factor;
+            });
+            helios.nodeSize(n => n.initSize).update().render();
+        };
+        document.getElementById("btnIncSize").onclick = () => scaleAllSizes(1.5);
+        document.getElementById("btnDecSize").onclick = () => scaleAllSizes(1 / 1.5);
+
+        document.getElementById("btnRandomColors").onclick = () => {
+            helios.nodeColor(() => [Math.random(), Math.random(), Math.random(), 1]).render();
+        };
+        document.getElementById("btnFadeNodes").onclick = () => {
+            helios.nodeColor(n => {
+                const c = (Array.isArray(n?.initColor) ? n.initColor.slice() : NODE_COLOR_DEFAULT.slice());
+                c[3] = 0.35; return c;
+            }).render();
+            Object.values(helios.network.nodes).forEach(n => { n.z = (Math.random() * 2 - 1) * 120; });
+            helios.update().render();
+        };
+
+        // Reposition (x,y)
+        const setPositionsXY = (placer) => {
+            const ids = Object.keys(helios.network.nodes);
+            ids.forEach((id, i) => {
+                const n = helios.network.nodes[id];
+                const p = placer(i, ids.length);
+                n.x = p.x; n.y = p.y;
+            });
+            helios.update().render();
+        };
+
+        document.getElementById("btnGrid").onclick = () => {
+            helios.pauseLayout();
+            setPositionsXY((i) => {
+                const col = i % 2, row = Math.floor(i / 2);
+                return { x: (col - 0.5) * 160, y: (row - 0.5) * 120 };
+            });
+        };
+        document.getElementById("btnScatter").onclick = () => {
+            helios.pauseLayout();
+            setPositionsXY(() => ({ x: (Math.random() * 2 - 1) * 180, y: (Math.random() * 2 - 1) * 140 }));
+        };
+
+        // Z depth controls
+        const scatterZ = () => {
+            Object.values(helios.network.nodes).forEach(n => { n.z = (Math.random() * 2 - 1) * 120; });
+            helios.update().render();
+        };
+        const flattenZ = () => {
+            Object.values(helios.network.nodes).forEach(n => { n.z = 0; });
+            helios.update().render();
+        };
+        document.getElementById("btnScatterZ").onclick = () => { helios.pauseLayout(); scatterZ(); };
+        document.getElementById("btnFlattenZ").onclick = () => { helios.pauseLayout(); flattenZ(); };
+
+        // Layout
+        document.getElementById("btnPauseLayout").onclick = () => helios.pauseLayout().render();
+        document.getElementById("btnResumeLayout").onclick = () => helios.resumeLayout().render();
+
+        // Add node (direct mutation)
+        let newCount = 1;
+        document.getElementById("btnAddNode").onclick = () => {
+            const id = `N${newCount++}`;
+            const nx = (Math.random() * 2 - 1) * 200;
+            const ny = (Math.random() * 2 - 1) * 160;
+            const nz = (Math.random() * 2 - 1) * 120;
+            helios.network.nodes[id] = {
+                id, label: `New ${id}`, x: nx, y: ny, z: nz,
+                initSize: 14, initColor: [0.95, 0.3, 0.55, 1], initOutlineColor: [1, 1, 1, 0.9],
+            };
+            if (helios.network.nodes.B) {
+                (helios.network.edges || (helios.network.edges = []))
+                    .push({ source: id, target: "B", width: 2, color: [0.8, 0.8, 0.95, 0.9] });
+            }
+            helios.update().render();
+        };
+
+        // Edge styles
+        const adjustEdgeWidth = (factor) => {
+            helios.edgeWidth(e => (e.width = (typeof e.width === "number" ? e.width : 2) * factor)).render();
+        };
+        document.getElementById("btnThickEdges").onclick = () => adjustEdgeWidth(1.6);
+        document.getElementById("btnLightEdges").onclick = () => adjustEdgeWidth(1 / 1.6);
+        document.getElementById("btnEdgeAlpha").onclick = () => {
+            helios.edgeColor(e => {
+                const c = (Array.isArray(e?.color) ? e.color.slice() : [0.85, 0.85, 0.95, 1]);
+                c[3] = 0.35; return c;
+            }).render();
+        };
+    </script>
+</body>
+
+</html>
