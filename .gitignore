@@ -1,0 +1,9 @@
+DS_Store
+
+# data files
+*.json 
+*.csv
+
+# image files
+*.png
+*.jpg
